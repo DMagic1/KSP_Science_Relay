@@ -1,0 +1,31 @@
+{
+     "NAME":"Science Relay",
+	 "URL":"https://raw.githubusercontent.com/DMagic1/KSP_Science_Relay/master/GameData/ScienceRelay/ScienceRelay.version",
+	 "DOWNLOAD":"https://github.com/DMagic1/KSP_Science_Relay/releases",
+     "GITHUB":{
+         "USERNAME":"DMagic1",
+         "REPOSITORY":"KSP_Science_Relay",
+         "ALLOW_PRE_RELEASE":false,
+     },
+     "VERSION":{
+         "MAJOR":1,
+         "MINOR":0,
+         "PATCH":1,
+         "BUILD":0
+     },
+     "KSP_VERSION":{
+         "MAJOR":1,
+         "MINOR":2,
+         "PATCH":0
+     },
+     "KSP_VERSION_MIN":{
+         "MAJOR":1,
+         "MINOR":2,
+         "PATCH":0
+     },
+     "KSP_VERSION_MAX":{
+         "MAJOR":1,
+         "MINOR":2,
+         "PATCH":0
+     }
+ } 
