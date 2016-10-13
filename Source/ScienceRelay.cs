@@ -41,20 +41,25 @@ namespace ScienceRelay
 	[KSPAddon(KSPAddon.Startup.Flight, false)]
 	public class ScienceRelay : MonoBehaviour
     {
-		private static Sprite transferImage;
+		private static Sprite transferNormal;
+		private static Sprite transferHighlight;
+		private static Sprite transferActive;
+		private static bool spritesLoaded;
 		private static ScienceRelay instance;
 
 		private string version;
 		private ScienceRelayParameters settings;
 		private bool transferAll;
 		private PopupDialog transferDialog;
+		private PopupDialog warningDialog;
 		private Button transferButton;
 		private ExperimentsResultDialog resultsDialog;
 		private ExperimentResultDialogPage currentPage;
-		//private List<Vessel> connectedVessels = new List<Vessel>();
 		private List<ScienceRelayData> queuedData = new List<ScienceRelayData>();
 		private CommPath pathCache = new CommPath();
 		private List<KeyValuePair<Vessel, double>> connectedVessels = new List<KeyValuePair<Vessel, double>>();
+		private static MethodInfo _occlusionMethod;
+		private static bool reflected;
 
 		public static ScienceRelay Instance
 		{
@@ -72,6 +77,9 @@ namespace ScienceRelay
 			if (!reflected)
 				assignReflection();
 
+			if (!spritesLoaded)
+				loadSprite();
+
 			instance = this;
 			
 			processPrefab();
@@ -82,6 +90,8 @@ namespace ScienceRelay
 			ScienceRelayDialog.onDialogSpawn.Add(onSpawn);
 			ScienceRelayDialog.onDialogClose.Add(onClose);
 			GameEvents.OnTriggeredDataTransmission.Add(onTriggeredData);
+			GameEvents.onGamePause.Add(onPause);
+			GameEvents.onGameUnpause.Add(onUnpause);
 
 			settings = HighLogic.CurrentGame.Parameters.CustomParams<ScienceRelayParameters>();
 
@@ -109,6 +119,42 @@ namespace ScienceRelay
 			ScienceRelayDialog.onDialogSpawn.Remove(onSpawn);
 			ScienceRelayDialog.onDialogClose.Remove(onClose);
 			GameEvents.OnTriggeredDataTransmission.Remove(onTriggeredData);
+			GameEvents.onGamePause.Remove(onPause);
+			GameEvents.onGameUnpause.Remove(onUnpause);
+		}
+
+		private void loadSprite()
+		{
+			Texture2D normal = GameDatabase.Instance.GetTexture("ScienceRelay/Resources/Relay_Normal", false);
+			Texture2D highlight = GameDatabase.Instance.GetTexture("ScienceRelay/Resources/Relay_Highlight", false);
+			Texture2D active = GameDatabase.Instance.GetTexture("ScienceRelay/Resources/Relay_Active", false);
+
+			if (normal == null || highlight == null || active == null)
+				return;
+
+			transferNormal = Sprite.Create(normal, new Rect(0, 0, normal.width, normal.height), new Vector2(0.5f, 0.5f));
+			transferHighlight = Sprite.Create(highlight, new Rect(0, 0, highlight.width, highlight.height), new Vector2(0.5f, 0.5f));
+			transferActive = Sprite.Create(active, new Rect(0, 0, active.width, active.height), new Vector2(0.5f, 0.5f));
+
+			spritesLoaded = true;
+		}
+
+		private void onPause()
+		{
+			if (transferDialog != null)
+				transferDialog.gameObject.SetActive(false);
+
+			if (warningDialog != null)
+				warningDialog.gameObject.SetActive(false);
+		}
+
+		private void onUnpause()
+		{
+			if (transferDialog != null)
+				transferDialog.gameObject.SetActive(true);
+
+			if (warningDialog != null)
+				warningDialog.gameObject.SetActive(true);
 		}
 
 		private void processPrefab()
@@ -143,10 +189,23 @@ namespace ScienceRelay
 					if (tooltip != null)
 						tooltip.textString = "Transfer Data To Another Vessel";
 
-					Image image = transferButton.GetComponent<Image>();
+					if (spritesLoaded)
+					{
+						Selectable select = transferButton.GetComponent<Selectable>();
 
-					//if (image != null)
-					//image.sprite = transferImage;
+						if (select != null)
+						{
+							select.image.sprite = transferNormal;
+							select.image.type = Image.Type.Simple;
+							select.transition = Selectable.Transition.SpriteSwap;
+
+							SpriteState state = select.spriteState;
+							state.highlightedSprite = transferHighlight;
+							state.pressedSprite = transferActive;
+							state.disabledSprite = transferActive;
+							select.spriteState = state;
+						}
+					}
 
 					dialogListener.buttonTransfer = transferButton;
 				}
@@ -262,12 +321,19 @@ namespace ScienceRelay
 
 				Vessel v = pair.Key;
 				
-				float boost = signalBoost((float)pair.Value, currentPage.pageData);
+				float boost = signalBoost((float)pair.Value, v, currentPage.pageData, currentPage.xmitDataScalar);
 
 				DialogGUILabel label = null;
 
 				if (settings.transmissionBoost)
-					label = new DialogGUILabel(string.Format("Boost: +{0:P0}", boost), 110, 25);
+				{
+					string transmit = string.Format("Xmit: {0:P0}", currentPage.xmitDataScalar * (1 + boost));
+
+					if (boost > 0)
+						transmit += string.Format("(+{0:P0})", boost);
+
+					label = new DialogGUILabel(transmit, 130, 25);
+				}
 
 				DialogGUIBase button = null;
 
@@ -277,7 +343,7 @@ namespace ScienceRelay
 											v.vesselName,
 											delegate
 											{
-												warningDialog(
+												spawnWarningDialog(
 												new ScienceRelayData()
 												{
 													_data = currentPage.pageData,
@@ -285,9 +351,10 @@ namespace ScienceRelay
 													_boost = boost,
 													_source = FlightGlobals.ActiveVessel,
 													_target = v,
-												});
+												},
+												currentPage.transmitWarningMessage);
 											},
-											170,
+											160,
 											30,
 											true,
 											null);
@@ -307,7 +374,7 @@ namespace ScienceRelay
 											},
 											true);
 
-					button.size = new Vector2(170, 30);
+					button.size = new Vector2(160, 30);
 				}
 
 				DialogGUIHorizontalLayout h = new DialogGUIHorizontalLayout(true, false, 4, new RectOffset(), TextAnchor.MiddleCenter, new DialogGUIBase[] { button });
@@ -339,16 +406,39 @@ namespace ScienceRelay
 				new DialogGUILabel(version, false, false)
 			}));
 
-			return PopupDialog.SpawnPopupDialog(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new MultiOptionDialog("", "Science Relay", UISkinManager.defaultSkin, new Rect(0.5f, 0.5f, 300, 300), dialog.ToArray()), false, UISkinManager.defaultSkin);
+			RectTransform resultRect = resultsDialog.GetComponent<RectTransform>();
+
+			Rect pos = new Rect(0.5f, 0.5f, 300, 300);
+
+			if (resultRect != null)
+			{
+				Vector2 resultPos = resultRect.position;
+
+				float scale = GameSettings.UI_SCALE;
+
+				int width = Screen.width;
+				int height = Screen.height;
+				
+				float xpos = (resultPos.x / scale) + width / 2;
+				float ypos = (resultPos.y / scale) + height / 2;
+
+				float yNorm = ypos / height;
+
+				pos.y = yNorm;
+
+				pos.x = xpos > (width - (550 * scale)) ? (xpos - 360) / width : (xpos + 360) / width;
+			}
+			
+			return PopupDialog.SpawnPopupDialog(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new MultiOptionDialog("", "Science Relay", UISkinManager.defaultSkin, pos, dialog.ToArray()), false, UISkinManager.defaultSkin);
 		}
 
-		private void warningDialog(ScienceRelayData data)
+		private void spawnWarningDialog(ScienceRelayData data, string message)
 		{
-			PopupDialog.SpawnPopupDialog(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new MultiOptionDialog(
-				"\nAre you sure you want to continue",
+			warningDialog = PopupDialog.SpawnPopupDialog(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new MultiOptionDialog(
+				message + "\nAre you sure you want to continue",
 				"Warning!",
 				UISkinManager.defaultSkin,
-				new Rect(0.5f, 0.5f, 300, 300),
+				new Rect(0.5f, 0.5f, 250, 120),
 				new DialogGUIBase[]
 				{
 					new DialogGUIButton<ScienceRelayData>(
@@ -362,113 +452,15 @@ namespace ScienceRelay
 				false, UISkinManager.defaultSkin, true, "");
 		}
 
-		private float getSignalBoost(ScienceData data, Vessel from, Vessel to)
-		{
-			if (settings.transmissionBoost)
-			{
-				if (settings.requireMPLForBoost)
-				{
-					if (labWithCrew(to))
-						return signalBoost(connectionStrength(from, to), data);
-				}
-				else
-					return signalBoost(connectionStrength(from, to), data);
-			}
-
-			return 0;
-		}
-
-		private float connectionStrength(Vessel from, Vessel to)
+		private float signalBoost(float s, Vessel target, ScienceData data, float xmit)
 		{
 			float f = 0;
 
-			if (!CommNetScenario.CommNetEnabled)
+			if (target == null)
 				return f;
 
-			if (from == null || to == null)
+			if (settings.requireMPLForBoost && !VesselUtilities.VesselHasModuleName("ModuleScienceLab", target))
 				return f;
-
-			RelayLog("Connection {0} - {1}", 0, to.vesselName);
-
-			if (from.connection == null || from.connection.Comm == null || from.connection.Comm.Net == null || from.connection.Comm.scienceCurve == null)
-				return f;
-
-			if (to.connection == null | to.connection.Comm == null)
-				return f;
-
-			cachedTargetNode = to.connection.Comm;
-
-			RelayLog("Connection {0}", 1);
-
-			//from.connection.Comm.Net.con
-
-			//if (from.connection.Comm.Net.FindClosestWhere(from.connection.Comm, pathCache, new Func<CommNode, CommNode, bool>(isTargetNode)) == null)
-			//{
-			//	cachedTargetNode = null;
-			//	return f;
-			//}
-
-			if (!from.connection.Comm.Net.FindPath(from.connection.Comm, pathCache, to.connection.Comm))
-			{
-				cachedTargetNode = null;
-				return f;
-			}
-			RelayLog("Connection {0}", 2);
-
-			cachedTargetNode = null;
-
-			if (pathCache == null)
-				return f;
-
-			RelayLog("Connection {0}", 3);
-
-			if (pathCache.Count <= 0)
-				return f;
-
-			RelayLog("Connection {0} - Count {1}", 4, pathCache.Count);
-
-			for (int i = pathCache.Count - 1; i >= 0; i--)
-			{
-				CommLink link = pathCache[i];
-
-				RelayLog("Connection {0} - Link: {1} - A: {2} - B: {3}", 5, i, link.a.name, link.b.name);
-			}
-
-			if (!pathCache.Last.Contains(to.connection.Comm))
-				return f;
-
-			RelayLog("Connection {0}", 6);
-
-			double s = pathCache.signalStrength;
-
-			f = (float)from.connection.Comm.scienceCurve.Evaluate(s);
-
-			RelayLog("Connection {0} - Value {1}", 7, f + 1);
-
-			return f + 1;
-		}
-
-		private CommNode cachedTargetNode;
-
-		private bool isTargetNode(CommNode source, CommNode target)
-		{
-			RelayLog("Connection Check - Relay: {0:N2} - Source: {1} - Target: {2} - IsHome: {3}", target.antennaRelay.power, source.name, target.name, target.isHome);
-
-			return target.antennaRelay.power > 0 ? !target.isHome || target == cachedTargetNode : target == cachedTargetNode;
-		}
-
-		private bool isSourceNode(CommNode target, CommNode source)
-		{
-			RelayLog("Connection Check - Relay: {0:N2} - Source: {1} - Target: {2} - IsHome: {3}", source.antennaRelay.power, source.name, target.name, source.isHome);
-
-			return source.antennaRelay.power > 0 ? true && !source.isHome: source == FlightGlobals.ActiveVessel.connection.Comm;
-
-			//return source == FlightGlobals.ActiveVessel.connection.Comm;
-		}
-
-		private float signalBoost(float s, ScienceData data)
-		{
-			float f = 0;
 
 			if (s <= 0)
 				return f;
@@ -482,7 +474,10 @@ namespace ScienceRelay
 				return f;
 
 			float recoveredData = ResearchAndDevelopment.GetScienceValue(data.dataAmount, sub, 1);
-			float transmitData = ResearchAndDevelopment.GetScienceValue(data.dataAmount, sub, data.baseTransmitValue);
+			float transmitData = ResearchAndDevelopment.GetScienceValue(data.dataAmount, sub, xmit);
+
+			if (recoveredData <= 0)
+				return f;
 
 			if (transmitData <= 0)
 				return f;
@@ -524,18 +519,25 @@ namespace ScienceRelay
 					if (page.host == null)
 						continue;
 
-					data.Add(new ScienceRelayData()
+					ScienceRelayData relayData = new ScienceRelayData()
 						{
 							_data = page.pageData,
 							_host = page.host,
-							_boost = signalBoost(RelayData._boost, page.pageData),
+							_boost = signalBoost(RelayData._boost + 1, RelayData._target, page.pageData, page.xmitDataScalar),
 							_target = RelayData._target,
 							_source = RelayData._source,
-						});
+						};
+
+					relayData._data.baseTransmitValue = page.xmitDataScalar;
+
+					data.Add(relayData);
 				}
 			}
 			else
+			{
+				RelayData._data.baseTransmitValue = currentPage.xmitDataScalar;
 				data.Add(RelayData);
+			}
 
 			for (int i = data.Count - 1; i >= 0; i--)
 			{
@@ -669,8 +671,6 @@ namespace ScienceRelay
 			if (d == null)
 				return false;
 
-			RelayLog("Transfer {0}", 0);
-
 			if (v.loaded)
 			{
 				List<ModuleScienceContainer> containers = v.FindPartModulesImplementing<ModuleScienceContainer>();
@@ -702,7 +702,9 @@ namespace ScienceRelay
 				if (currentContainer != null)
 				{
 					d.triggered = false;
-					d.dataAmount *= (d.baseTransmitValue * boost);
+					d.dataAmount *= (d.baseTransmitValue * (1 + boost));
+					d.transmitBonus = 1;
+					d.baseTransmitValue = 1;
 					return currentContainer.AddData(d);
 				}
 			}
@@ -789,8 +791,10 @@ namespace ScienceRelay
 				{
 					d.triggered = false;
 					d.dataAmount = d.dataAmount * (d.baseTransmitValue * (boost + 1));
+					d.transmitBonus = 1;
+					d.baseTransmitValue = 1;
 					d.container = host;
-					//RelayLog("Transfer {0} - {1}", 8, currentContainer.moduleName);
+					//RelayLog("Transfer {0} - Data: {1} - Amount: {2:N4} - Boost: {3:N4}", 8, d.title, d.dataAmount, boost);
 					d.Save(currentContainer.moduleValues.AddNode("ScienceData"));
 					return true;
 				}
@@ -941,22 +945,7 @@ namespace ScienceRelay
 				return false;
 
 			if (CommNetScenario.CommNetEnabled)
-			{
-				List<KeyValuePair<Vessel, double>> initialVesselList = getConnectedVessels(vessel);
-
-				for (int i = initialVesselList.Count - 1; i >= 0; i--)
-				{
-					KeyValuePair<Vessel, double> pair = initialVesselList[i];
-
-					if (settings.requireMPL && !VesselUtilities.VesselHasModuleName("ModuleScienceLab", pair.Key))
-						continue;
-
-					if (!VesselUtilities.VesselHasModuleName("ModuleScienceContainer", pair.Key))
-						continue;
-
-					connectedVessels.Add(new KeyValuePair<Vessel, double>(pair.Key, pair.Value));
-				}
-			}
+				connectedVessels = getConnectedVessels(vessel);
 			else
 			{
 				for (int i = FlightGlobals.Vessels.Count - 1; i >= 0; i--)
@@ -991,7 +980,7 @@ namespace ScienceRelay
 		{
 			List<KeyValuePair<Vessel, double>> connections = new List<KeyValuePair<Vessel, double>>();
 
-			List<CommNode> checkNodes = new List<CommNode>();
+			List<KeyValuePair<CommNode, double>> checkNodes = new List<KeyValuePair<CommNode, double>>();
 
 			//RelayLog("Vessels {0}", 0);
 
@@ -1003,7 +992,7 @@ namespace ScienceRelay
 
 				if (source != null)
 				{
-					checkNodes.Add(source);
+					checkNodes.Add(new KeyValuePair<CommNode, double>(source, 1));
 
 					CommNetwork net = v.connection.Comm.Net;
 
@@ -1048,17 +1037,21 @@ namespace ScienceRelay
 							if (pathCache.Count <= 0)
 								continue;
 
-							for (int j = pathCache.Count - 1; j >= 0; j--)
+							double totalStrength = 1;
+
+							int l = pathCache.Count;
+
+							for (int j = 0; j < l; j++)
 							{
 								CommLink link = pathCache[j];
 
-								//RelayLog("Vessels {0} - Link {1}: A: {2} - B: {3}", 8, j, link.a.name, link.b.name);
+								totalStrength *= link.signalStrength;
 
-								if (!checkNodes.Contains(link.a))
-									checkNodes.Add(link.a);
+								if (!link.a.isHome && !updateCommNode(checkNodes, link.a, totalStrength))
+									checkNodes.Add(new KeyValuePair<CommNode, double>(link.a, totalStrength));
 
-								if (!checkNodes.Contains(link.b))
-									checkNodes.Add(link.b);
+								if (!link.b.isHome && !updateCommNode(checkNodes, link.b, totalStrength))
+									checkNodes.Add(new KeyValuePair<CommNode, double>(link.b, totalStrength));
 							}
 
 							if (settings.requireMPL && !VesselUtilities.VesselHasModuleName("ModuleScienceLab", otherVessel))
@@ -1073,6 +1066,8 @@ namespace ScienceRelay
 
 							s = source.scienceCurve.Evaluate(s);
 
+							//RelayLog("Vessels {0} - Power: {1:N4} - Vessel: {2}", 9, s, otherVessel.vesselName);
+
 							connections.Add(new KeyValuePair<Vessel, double>(otherVessel, s + 1));
 						}
 
@@ -1080,7 +1075,9 @@ namespace ScienceRelay
 
 						for (int k = checkNodes.Count - 1; k >= 0; k--)
 						{
-							CommNode node = checkNodes[k];
+							KeyValuePair<CommNode, double> pair = checkNodes[k];
+
+							CommNode node = pair.Key;
 
 							if (node.isHome)
 								continue;
@@ -1098,23 +1095,7 @@ namespace ScienceRelay
 									continue;
 
 								//RelayLog("Vessels {0} - Direct Other Vessel: {1}", 12, otherVessel.vesselName);
-
-								bool flag = false;
-
-								for (int m = connections.Count - 1; m >= 0; m--)
-								{
-									Vessel vChecked = connections[m].Key;
-
-									if (vChecked != otherVessel)
-										continue;
-
-									flag = true;
-									break;
-								}
-
-								if (flag)
-									continue;
-
+								
 								//RelayLog("Vessels {0}", 13);
 
 								VesselType type = otherVessel.vesselType;
@@ -1147,25 +1128,71 @@ namespace ScienceRelay
 
 								//RelayLog("Vessels {0}", 16);
 
-								double power = directConnection(node, otherComm, dist, source == node);
+								double power = directConnection(node, otherComm, dist, source == node, pair.Value);
 
 								if (power <= 0)
 									continue;
 
-								//RelayLog("Vessels {0}", 18);
-
 								power = source.scienceCurve.Evaluate(power);
 
-								connections.Add(new KeyValuePair<Vessel, double>(otherVessel, power));
+								//RelayLog("Vessels {0} - Power: {1:N4}", 18, power);
+
+								bool flag = false;
+
+								for (int m = connections.Count - 1; m >= 0; m--)
+								{
+									KeyValuePair<Vessel, double> connect = connections[m];
+
+									if (connect.Key != otherVessel)
+										continue;
+
+									//RelayLog("Vessels {0} - Old Power: {1:N4}", 18, connect.Value);
+
+									if (connect.Value < power + 1)
+										connections[m] = new KeyValuePair<Vessel, double>(connect.Key, power + 1);
+
+									flag = true;
+									break;
+								}
+
+								for (int m = connections.Count - 1; m >= 0; m--)
+								{
+									KeyValuePair<Vessel, double> connect = connections[m];
+
+									if (connect.Key != otherVessel)
+										continue;
+
+									//RelayLog("Vessels {0} - New Power: {1:N4}", 18, connect.Value);
+									break;
+								}
+
+								if (!flag)
+									connections.Add(new KeyValuePair<Vessel, double>(otherVessel, power + 1));
 							}
 						}
-
-
 					}
 				}
 			}
 
 			return connections;
+		}
+
+		private bool updateCommNode(List<KeyValuePair<CommNode, double>> nodes, CommNode newNode, double signal)
+		{
+			for (int i = nodes.Count - 1; i >= 0; i--)
+			{
+				KeyValuePair<CommNode, double> node = nodes[i];
+
+				if (node.Key != newNode)
+					continue;
+
+				if (signal > node.Value)
+					nodes[i] = new KeyValuePair<CommNode, double>(node.Key, signal);
+
+				return true;
+			}
+
+			return false;
 		}
 
 		private bool isOccluded(CommNode a, CommNode b, double dist, CommNetwork net)
@@ -1191,18 +1218,10 @@ namespace ScienceRelay
 			return !(bool)occlusion;
 		}
 
-		private void assignReflection()
+		private double directConnection(CommNode a, CommNode b, double dist, bool source, double strength)
 		{
-			_occlusionMethod = typeof(CommNetwork).GetMethod("TestOcclusion", BindingFlags.Instance | BindingFlags.NonPublic, null, new Type[] { typeof(Vector3d), typeof(Occluder), typeof(Vector3d), typeof(Occluder), typeof(double) }, null);
+			//RelayLog("Vessels {0} - Old Signal: {1:N4}", 17, strength);
 
-			reflected = true;
-		}
-
-		private static MethodInfo _occlusionMethod;
-		private static bool reflected;
-
-		private double directConnection(CommNode a, CommNode b, double dist, bool source)
-		{
 			double plasmaMult = a.GetSignalStrengthMultiplier(b) * b.GetSignalStrengthMultiplier(a);
 
 			double power = 0;
@@ -1213,13 +1232,13 @@ namespace ScienceRelay
 			{
 				double range = CommNetScenario.RangeModel.GetNormalizedRange(a.antennaTransmit.power, b.antennaTransmit.power, dist);
 
-				//RelayLog("Vessels {0} - Range: {1:N4}", 17, range);
+				//RelayLog("Source Vessels {0} - Range: {1:N4}", 17, range);
 
 				if (range > 0)
 				{
 					power = Math.Sqrt(a.antennaTransmit.rangeCurve.Evaluate(range) * b.antennaTransmit.rangeCurve.Evaluate(range));
 
-					//RelayLog("Vessels {0} - Power: {1:N4}", 17, power);
+					//RelayLog("Source Vessels {0} - Power: {1:N4}", 17, power);
 
 					power *= plasmaMult;
 				}
@@ -1251,22 +1270,18 @@ namespace ScienceRelay
 				}
 			}
 
-			return power;
+			//RelayLog("Vessels {0} - Final Power: {1:N4}", 17, power * strength);
+
+			return power * strength;
 		}
 
-		private bool vesselConnected(Vessel from, Vessel to)
+		private void assignReflection()
 		{
-			CommNetwork network = from.connection.Comm.Net;
+			_occlusionMethod = typeof(CommNetwork).GetMethod("TestOcclusion", BindingFlags.Instance | BindingFlags.NonPublic, null, new Type[] { typeof(Vector3d), typeof(Occluder), typeof(Vector3d), typeof(Occluder), typeof(double) }, null);
 
-			if (network == null)
-				return false;
-
-			if (to == null || to.connection == null || to.connection.Comm == null)
-				return false;
-
-			return network.Contains(to.connection.Comm);
+			reflected = true;
 		}
-
+		
 		public static void RelayLog(string s, params object[] o)
 		{
 			Debug.Log(string.Format("[Science Relay] " + s, o));
