@@ -31,6 +31,8 @@ namespace ScienceRelay
 	{
 		[GameParameters.CustomParameterUI("Require Science Lab on Target Vessel", autoPersistance = true)]
 		public bool requireMPL = true;
+		[GameParameters.CustomParameterUI("Require Relay Antenna on Target Vessel", autoPersistance = true)]
+		public bool requireRelay = false;
 		[GameParameters.CustomParameterUI("Data Transmission Boost", toolTip = "Boost data transmission based on connection strength", autoPersistance = true)]
 		public bool transmissionBoost = true;
 		[GameParameters.CustomParameterUI("Require Crewed Science Lab For Boost", autoPersistance = true)]
@@ -48,24 +50,28 @@ namespace ScienceRelay
 					transmissionBoost = true;
 					requireMPLForBoost = false;
 					requireMPL = false;
+					requireRelay = false;
 					transmissionPenalty = 0;
 					break;
 				case GameParameters.Preset.Normal:
 					transmissionBoost = true;
 					requireMPLForBoost = false;
 					requireMPL = false;
+					requireRelay = false;
 					transmissionPenalty = 0.25f;
 					break;
 				case GameParameters.Preset.Moderate:
 					transmissionBoost = true;
 					requireMPLForBoost = true;
 					requireMPL = false;
+					requireRelay = true;
 					transmissionPenalty = 0.5f;
 					break;
 				case GameParameters.Preset.Hard:
 					transmissionBoost = true;
 					requireMPLForBoost = true;
 					requireMPL = true;
+					requireRelay = true;
 					transmissionPenalty = 0.75f;
 					break;
 				case GameParameters.Preset.Custom:
