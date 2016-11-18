@@ -244,6 +244,9 @@ namespace ScienceRelay
 
 			currentPage = resultsDialog.currentPage;
 
+			if (currentPage.pageData != null)
+				currentPage.pageData.baseTransmitValue = currentPage.xmitDataScalar;
+
 			transferButton.gameObject.SetActive(getConnectedVessels());
 		}
 
@@ -268,6 +271,9 @@ namespace ScienceRelay
 				return;
 
 			currentPage = resultsDialog.currentPage;
+
+			if (currentPage.pageData != null)
+				currentPage.pageData.baseTransmitValue = currentPage.xmitDataScalar;
 
 			popupDismiss();
 		}
