@@ -622,15 +622,18 @@ namespace ScienceRelay
 			if (data == null)
 				return;
 
-			if (aborted)
-				return;
-
 			for (int i = queuedData.Count - 1; i >= 0; i--)
 			{
 				ScienceRelayData d = queuedData[i];
 
 				if (d._data.subjectID != data.subjectID)
 					continue;
+
+				if (aborted)
+				{
+					data.triggered = false;
+					return;
+				}
 
 				if (!finishTransfer(d._target, d._data, d._boost))
 				{
