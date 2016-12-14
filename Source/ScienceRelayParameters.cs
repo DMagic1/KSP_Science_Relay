@@ -37,7 +37,7 @@ namespace ScienceRelay
 		public bool transmissionBoost = true;
 		[GameParameters.CustomParameterUI("Require Crewed Science Lab For Boost", autoPersistance = true)]
 		public bool requireMPLForBoost = false;
-		[GameParameters.CustomFloatParameterUI("Transmission Boost Penalty", toolTip = "Amount by which transmission boost is reduced as compared to sending data home", minValue = 0, maxValue = 1, displayFormat = "P0", autoPersistance = true)]
+		[GameParameters.CustomFloatParameterUI("Transmission Boost Penalty", toolTip = "Amount by which transmission boost is reduced as compared to sending data home", asPercentage = true, minValue = 0, maxValue = 1, displayFormat = "N2", autoPersistance = true)]
 		public float transmissionPenalty = 0.5f;
 		[GameParameters.CustomParameterUI("Show Transmission Warnings", toolTip = "Show warnings for non-repeatable experiments", autoPersistance = true)]
 		public bool showTransmitWarning;
