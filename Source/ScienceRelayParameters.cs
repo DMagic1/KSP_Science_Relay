@@ -25,21 +25,23 @@ THE SOFTWARE.
 */
 #endregion
 
+using KSP.Localization;
+
 namespace ScienceRelay
 {
 	public class ScienceRelayParameters : GameParameters.CustomParameterNode
 	{
-		[GameParameters.CustomParameterUI("Require Science Lab on Target Vessel", autoPersistance = true)]
+		[GameParameters.CustomParameterUI("#autoLOC_ScienceRelay_Settings_MPL", autoPersistance = true)]
 		public bool requireMPL = true;
-		[GameParameters.CustomParameterUI("Require Relay Antenna on Target Vessel", autoPersistance = true)]
+		[GameParameters.CustomParameterUI("#autoLOC_ScienceRelay_Settings_Relay", autoPersistance = true)]
 		public bool requireRelay = false;
-		[GameParameters.CustomParameterUI("Data Transmission Boost", toolTip = "Boost data transmission based on connection strength", autoPersistance = true)]
+		[GameParameters.CustomParameterUI("#autoLOC_ScienceRelay_Settings_Boost", toolTip = "#autoLOC_ScienceRelay_Settings_Tooltip_Boost", autoPersistance = true)]
 		public bool transmissionBoost = true;
-		[GameParameters.CustomParameterUI("Require Crewed Science Lab For Boost", autoPersistance = true)]
+		[GameParameters.CustomParameterUI("#autoLOC_ScienceRelay_Settings_MPLBoost", autoPersistance = true)]
 		public bool requireMPLForBoost = false;
-		[GameParameters.CustomFloatParameterUI("Transmission Boost Penalty", toolTip = "Amount by which transmission boost is reduced as compared to sending data home", asPercentage = true, minValue = 0, maxValue = 1, displayFormat = "N2", autoPersistance = true)]
+		[GameParameters.CustomFloatParameterUI("#autoLOC_ScienceRelay_Settings_Penalty", toolTip = "#autoLOC_ScienceRelay_Settings_Tooltip_Penalty", asPercentage = true, minValue = 0, maxValue = 1, displayFormat = "N2", autoPersistance = true)]
 		public float transmissionPenalty = 0.5f;
-		[GameParameters.CustomParameterUI("Show Transmission Warnings", toolTip = "Show warnings for non-repeatable experiments", autoPersistance = true)]
+		[GameParameters.CustomParameterUI("#autoLOC_ScienceRelay_Settings_Warning", toolTip = "#autoLOC_ScienceRelay_Settings_Tooltip_Warning", autoPersistance = true)]
 		public bool showTransmitWarning;
 
 		public override void SetDifficultyPreset(GameParameters.Preset preset)
@@ -100,6 +102,11 @@ namespace ScienceRelay
 		}
 
 		public override string Section
+		{
+			get { return "DMagic Mods"; }
+		}
+
+		public override string DisplaySection
 		{
 			get { return "DMagic Mods"; }
 		}

@@ -31,6 +31,7 @@ using System.Reflection;
 using System.Linq;
 using KSP.UI.TooltipTypes;
 using KSP.UI.Screens.Flight.Dialogs;
+using KSP.Localization;
 using CommNet;
 using FinePrint.Utilities;
 using UnityEngine;
@@ -194,7 +195,7 @@ namespace ScienceRelay
 					TooltipController_Text tooltip = transferButton.GetComponent<TooltipController_Text>();
 
 					if (tooltip != null)
-						tooltip.textString = "Transfer Data To Another Vessel";
+						tooltip.textString = Localizer.Format("#autoLOC_ScienceRelay_Tooltip");
 
 					if (spritesLoaded)
 					{
@@ -307,23 +308,19 @@ namespace ScienceRelay
 		{
 			List<DialogGUIBase> dialog = new List<DialogGUIBase>();
 
-			dialog.Add(new DialogGUIHorizontalLayout(true, false, 0, new RectOffset(), TextAnchor.UpperCenter, new DialogGUIBase[]
-				{
-					new DialogGUILabel(string.Format("Transmit data to the selected vessel:\n{0}", page.pageData.title), false, false)
-				}));
+			dialog.Add(new DialogGUILabel(Localizer.Format("#autoLOC_ScienceRelay_Transmit", page.pageData.title), false, false));
 
 			transferAll = false;
 
 			if (resultsDialog.pages.Count > 1)
 			{
-				dialog.Add(new DialogGUIHorizontalLayout(true, false, 0, new RectOffset(), TextAnchor.UpperCenter, new DialogGUIBase[]
-				{
-				new DialogGUIToggle(false, "Transfer All Open Data",
+				dialog.Add(new DialogGUIToggle(false,
+					Localizer.Format("#autoLOC_ScienceRelay_TransmitAll"),
 					delegate(bool b)
 					{
 						transferAll = !transferAll;
-					}, 200, 20)
-				}));
+					})
+				);
 			}
 
 			List<DialogGUIHorizontalLayout> vessels = new List<DialogGUIHorizontalLayout>();
@@ -405,7 +402,7 @@ namespace ScienceRelay
 			for (int i = 0; i < vessels.Count; i++)
 				scrollList[i + 1] = vessels[i];
 
-			dialog.Add(new DialogGUIScrollList(Vector2.one, false, true,
+			dialog.Add(new DialogGUIScrollList(new Vector2(270, 200), false, true,
 				new DialogGUIVerticalLayout(10, 100, 4, new RectOffset(6, 24, 10, 10), TextAnchor.MiddleLeft, scrollList)
 				));
 
@@ -414,7 +411,7 @@ namespace ScienceRelay
 			dialog.Add(new DialogGUIHorizontalLayout(new DialogGUIBase[]
 			{ 
 				new DialogGUIFlexibleSpace(),
-				new DialogGUIButton("Cancel Transfer", popupDismiss),
+				new DialogGUIButton(Localizer.Format("#autoLOC_190768"), popupDismiss),
 				new DialogGUIFlexibleSpace(),
 				new DialogGUILabel(version, false, false)
 			}));
@@ -442,25 +439,32 @@ namespace ScienceRelay
 				pos.x = xpos > (width - (550 * scale)) ? (xpos - 360) / width : (xpos + 360) / width;
 			}
 			
-			return PopupDialog.SpawnPopupDialog(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new MultiOptionDialog("", "Science Relay", UISkinManager.defaultSkin, pos, dialog.ToArray()), false, UISkinManager.defaultSkin);
+			return PopupDialog.SpawnPopupDialog(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new MultiOptionDialog(
+				"ScienceRelayDialog",
+				"",
+				Localizer.Format("#autoLOC_ScienceRelay_Title"),
+				UISkinManager.defaultSkin,
+				pos,
+				dialog.ToArray()), false, UISkinManager.defaultSkin);
 		}
 
 		private void spawnWarningDialog(ScienceRelayData data, string message)
 		{
 			warningDialog = PopupDialog.SpawnPopupDialog(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new MultiOptionDialog(
-				message + "\nAre you sure you want to continue",
-				"Warning!",
+				"ScienceRelayWarning",
+				Localizer.Format("#autoLOC_6001489", message),
+				Localizer.Format("#autoLOC_236416"),
 				UISkinManager.defaultSkin,
 				new Rect(0.5f, 0.5f, 250, 120),
 				new DialogGUIBase[]
 				{
 					new DialogGUIButton<ScienceRelayData>(
-						"Transmit Data",
+						Localizer.Format("#autoLOC_6001430"),
 						transferToVessel,
 						data,
 						true
 						),
-					new DialogGUIButton("Cancel", null, true)
+					new DialogGUIButton(Localizer.Format("#autoLOC_190768"), null, true)
 				}),
 				false, UISkinManager.defaultSkin, true, "");
 		}
@@ -593,9 +597,9 @@ namespace ScienceRelay
 				if (bestTransmitter == null)
 				{
 					if (CommNetScenario.CommNetEnabled)
-						ScreenMessages.PostScreenMessage("No usable, in-range Comms Devices on this vessel. Cannot Transmit Data.", 3, ScreenMessageStyle.UPPER_CENTER);
+						ScreenMessages.PostScreenMessage(Localizer.Format("#autoLOC_238505"), 3, ScreenMessageStyle.UPPER_CENTER);
 					else
-						ScreenMessages.PostScreenMessage("No usable Comms Devices on this vessel. Cannot Transmit Data.", 3, ScreenMessageStyle.UPPER_CENTER);
+						ScreenMessages.PostScreenMessage(Localizer.Format("#autoLOC_238507"), 3, ScreenMessageStyle.UPPER_CENTER);
 				}
 				else
 				{
@@ -670,7 +674,13 @@ namespace ScienceRelay
 				}
 				else
 				{
-					ScreenMessages.PostScreenMessage(string.Format("<color=#99FF00FF>[{0}] {1:N1} data received on <i>{2}</i></color>", d._target.vesselName, data.dataAmount, data.title), 4, ScreenMessageStyle.UPPER_LEFT);
+					ScreenMessages.PostScreenMessage(Localizer.Format("#autoLOC_238419", new string[]
+					{
+						d._target.vesselName,
+						data.dataAmount.ToString("F0"),
+						data.title
+					}),
+					4, ScreenMessageStyle.UPPER_LEFT);
 				}
 
 				queuedData.Remove(d);
