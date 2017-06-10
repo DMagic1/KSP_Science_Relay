@@ -442,7 +442,7 @@ namespace ScienceRelay
 			return PopupDialog.SpawnPopupDialog(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new MultiOptionDialog(
 				"ScienceRelayDialog",
 				"",
-				Localizer.Format("#autoLOC_ScienceRelay_Title"),
+				"Science Relay",
 				UISkinManager.defaultSkin,
 				pos,
 				dialog.ToArray()), false, UISkinManager.defaultSkin);
