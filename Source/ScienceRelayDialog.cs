@@ -47,7 +47,10 @@ namespace ScienceRelay
 			dialog = gameObject.GetComponentInParent<ExperimentsResultDialog>();
 
 			if (dialog == null)
-				Destroy(gameObject);
+			{
+				Destroy(this);
+				return;
+			}
 
 			if (ScienceRelay.Instance != null)
 			{
