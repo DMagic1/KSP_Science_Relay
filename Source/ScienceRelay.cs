@@ -61,6 +61,8 @@ namespace ScienceRelay
 		private List<KeyValuePair<Vessel, double>> connectedVessels = new List<KeyValuePair<Vessel, double>>();
 		private static MethodInfo _occlusionMethod;
 		private static bool reflected;
+		private static bool CNConstellationChecked;
+		private static bool CNConstellationLoaded;
 
 		public static ScienceRelay Instance
 		{
@@ -70,13 +72,22 @@ namespace ScienceRelay
 		private void Awake()
 		{
 			if (HighLogic.CurrentGame.Mode == Game.Modes.SANDBOX)
+			{
 				Destroy(gameObject);
+				return;
+			}
 
 			if (instance != null)
+			{
 				Destroy(gameObject);
+				return;
+			}
 
 			if (!reflected)
 				assignReflection();
+
+			if (!CNConstellationChecked)
+				CommNetConstellationCheck();
 
 			if (!spritesLoaded)
 				loadSprite();
@@ -218,6 +229,8 @@ namespace ScienceRelay
 					dialogListener.buttonTransfer = transferButton;
 				}
 			}
+
+			RelayLog("Science results prefab processed...");
 		}
 
 		private void onSpawn(ExperimentsResultDialog dialog)
@@ -602,7 +615,9 @@ namespace ScienceRelay
 						ScreenMessages.PostScreenMessage(Localizer.Format("#autoLOC_238507"), 3, ScreenMessageStyle.UPPER_CENTER);
 				}
 				else
-				{
+				{	 
+					RelayLog("Attempting to transmit science data: [{0}] to vessel: [{1}] at boost level: {2:P2}", data[i]._data.title, data[i]._target.vesselName, data[i]._boost);
+
 					d.triggered = true;
 
 					bestTransmitter.TransmitData(new List<ScienceData> { d });
@@ -635,12 +650,15 @@ namespace ScienceRelay
 
 				if (aborted)
 				{
+					RelayLog("Science data: [{0}] transmission to vessel: [{1}] aborted, returning to sender: [{2}]", d._data.title, d._target.vesselName, d._source.vesselName);
 					data.triggered = false;
 					return;
 				}
 
 				if (!finishTransfer(d._target, d._data, d._boost))
-				{
+				{					
+					RelayLog("Data transfer failed; returning to sender: [{0}]", d._source.vesselName);
+				
 					Part host = d._host;
 
 					List<IScienceDataContainer> containers = host.FindModulesImplementing<IScienceDataContainer>();
@@ -674,6 +692,7 @@ namespace ScienceRelay
 				}
 				else
 				{
+					RelayLog("Science data: [{0}] successfully transmitted to vessel: [{1}] from vessel: [{2}]", d._data.title, d._target.vesselName, d._source.vesselName);
 					ScreenMessages.PostScreenMessage(Localizer.Format("#autoLOC_238419", new string[]
 					{
 						d._target.vesselName,
@@ -733,6 +752,8 @@ namespace ScienceRelay
 					d.baseTransmitValue = 1;
 					return currentContainer.AddData(d);
 				}
+				else
+					RelayLog("No valid science container for science: [{0}] found on vessel: [{1}]", d.title, v.vesselName);
 			}
 			else
 			{
@@ -811,6 +832,8 @@ namespace ScienceRelay
 					d.Save(currentContainer.moduleValues.AddNode("ScienceData"));
 					return true;
 				}
+				else
+					RelayLog("No valid science container for science: [{0}] found on vessel: [{1}]", d.title, v.vesselName);
 			}
 
 			return false;
@@ -957,7 +980,7 @@ namespace ScienceRelay
 			if (vessel == null)
 				return false;
 
-			if (CommNetScenario.CommNetEnabled)
+			if (CommNetScenario.CommNetEnabled)// && !CNConstellationLoaded)
 				connectedVessels = getConnectedVessels(vessel);
 			else
 			{
@@ -985,6 +1008,8 @@ namespace ScienceRelay
 					connectedVessels.Add(new KeyValuePair<Vessel, double>(v, 0));
 				}
 			}
+
+			RelayLog("Connected vessels detected for science transmission: {0}", connectedVessels.Count);
 
 			return connectedVessels.Count > 0;
 		}
@@ -1244,14 +1269,33 @@ namespace ScienceRelay
 
 		private void assignReflection()
 		{
-			_occlusionMethod = typeof(CommNetwork).GetMethod("TestOcclusion", BindingFlags.Instance | BindingFlags.NonPublic, null, new Type[] { typeof(Vector3d), typeof(Occluder), typeof(Vector3d), typeof(Occluder), typeof(double) }, null);
+			try
+			{
+				_occlusionMethod = typeof(CommNetwork).GetMethod("TestOcclusion", BindingFlags.Instance | BindingFlags.NonPublic, null, new Type[] { typeof(Vector3d), typeof(Occluder), typeof(Vector3d), typeof(Occluder), typeof(double) }, null);
+			}
+			catch (Exception e)
+			{
+				RelayLog("Error in assigning occlusion method; Science Relay may not be able to accurately determine vessel connectivity\n{0}", e);	
+			}
 
 			reflected = true;
+		}
+
+		private void CommNetConstellationCheck()
+		{
+			var assembly = AssemblyLoader.loadedAssemblies.FirstOrDefault(a => a.assembly.GetName().Name.StartsWith("CommNetConstellation"));
+
+			CNConstellationLoaded = assembly != null;
+
+			if (CNConstellationLoaded)
+				RelayLog("CommNet Constellation addon detected; Science Relay disabling CommNet connection status integration");
+
+			CNConstellationChecked = true;
 		}
 		
 		public static void RelayLog(string s, params object[] o)
 		{
-			Debug.Log(string.Format("[Science Relay] " + s, o));
+			Debug.Log(string.Format("[Science_Relay] " + s, o));
 		}
     }
 }
