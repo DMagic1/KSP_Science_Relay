@@ -980,10 +980,14 @@ namespace ScienceRelay
 			if (vessel == null)
 				return false;
 
+            //RelayLog("Finding Connected Vessels...");
+
 			if (CommNetScenario.CommNetEnabled)// && !CNConstellationLoaded)
 				connectedVessels = getConnectedVessels(vessel);
 			else
 			{
+                //RelayLog("No connection status required");
+
 				for (int i = FlightGlobals.Vessels.Count - 1; i >= 0; i--)
 				{
 					Vessel v = FlightGlobals.Vessels[i];
@@ -1020,6 +1024,8 @@ namespace ScienceRelay
 
 			List<KeyValuePair<CommNode, double>> checkNodes = new List<KeyValuePair<CommNode, double>>();
 
+            //RelayLog("Parsing vessels for connection");
+
 			if (v.connection != null)
 			{
 				CommNode source = v.connection.Comm;
@@ -1029,10 +1035,14 @@ namespace ScienceRelay
 					if (!settings.requireRelay)
 						checkNodes.Add(new KeyValuePair<CommNode, double>(source, 1));
 
+                    //RelayLog("Source node valid");
+
 					CommNetwork net = v.connection.Comm.Net;
 
 					if (net != null)
 					{
+                        //RelayLog("Source network valid");
+
 						for (int i = FlightGlobals.Vessels.Count - 1; i >= 0; i--)
 						{
 							Vessel otherVessel = FlightGlobals.Vessels[i];
@@ -1051,6 +1061,11 @@ namespace ScienceRelay
 							if (otherVessel.connection == null || otherVessel.connection.Comm == null)
 								continue;
 
+                            //RelayLog("Vessel status check for\n---- {0} ----", otherVessel.vesselName);
+
+                            if (otherVessel.connection.ControlPath.First.cost < 0.0001)
+                                continue;
+
 							if (!net.FindPath(source, pathCache, otherVessel.connection.Comm))
 								continue;
 
@@ -1060,8 +1075,12 @@ namespace ScienceRelay
 							if (pathCache.Count <= 0)
 								continue;
 
+                            //RelayLog("Vessel network path valid");
+
 							if (!settings.requireRelay)
 							{
+                                //RelayLog("Searching for direct paths");
+
 								double totalStrength = 1;
 
 								int l = pathCache.Count;
@@ -1071,6 +1090,8 @@ namespace ScienceRelay
 									CommLink link = pathCache[j];
 
 									totalStrength *= link.signalStrength;
+
+                                    //RelayLog("Checking ling status...");
 
 									if (!link.a.isHome && !updateCommNode(checkNodes, link.a, totalStrength))
 										checkNodes.Add(new KeyValuePair<CommNode, double>(link.a, totalStrength));
@@ -1090,11 +1111,15 @@ namespace ScienceRelay
 
 							s = source.scienceCurve.Evaluate(s);
 
+                            //RelayLog("Vessel has valid containers - Connection status: {0:N2}", s);
+
 							connections.Add(new KeyValuePair<Vessel, double>(otherVessel, s + 1));
 						}
 
 						if (!settings.requireRelay)
 						{
+                            //RelayLog("Checking direct connections...");
+
 							for (int k = checkNodes.Count - 1; k >= 0; k--)
 							{
 								KeyValuePair<CommNode, double> pair = checkNodes[k];
@@ -1103,6 +1128,8 @@ namespace ScienceRelay
 
 								if (node.isHome)
 									continue;
+
+                                //RelayLog("Check node: {0}", k);
 
 								for (int l = FlightGlobals.Vessels.Count - 1; l >= 0; l--)
 								{
@@ -1127,6 +1154,8 @@ namespace ScienceRelay
 									if (otherComm.antennaRelay.power > 0)
 										continue;
 
+                                    //RelayLog("Antenna valid for vessel\n---- {0} ----", otherVessel.vesselName);
+
 									if (settings.requireMPL && !VesselUtilities.VesselHasModuleName("ModuleScienceLab", otherVessel))
 										continue;
 
@@ -1144,6 +1173,8 @@ namespace ScienceRelay
 										continue;
 
 									power = source.scienceCurve.Evaluate(power);
+
+                                    //RelayLog("Vessel not occluded, with signal strength: {0:N2}", power);
 
 									bool flag = false;
 
@@ -1171,8 +1202,11 @@ namespace ScienceRelay
 										break;
 									}
 
-									if (!flag)
-										connections.Add(new KeyValuePair<Vessel, double>(otherVessel, power + 1));
+                                    if (!flag)
+                                    {
+                                        //RelayLog("Adding direct connection vessel");
+                                        connections.Add(new KeyValuePair<Vessel, double>(otherVessel, power + 1));
+                                    }
 								}
 							}
 						}
@@ -1192,6 +1226,8 @@ namespace ScienceRelay
 				if (node.Key != newNode)
 					continue;
 
+                //RelayLog("Updating Comm Node - New Signal: {0:N2} - Old Value: {1:N2}", signal, node.Value);
+
 				if (signal > node.Value)
 					nodes[i] = new KeyValuePair<CommNode, double>(node.Key, signal);
 
@@ -1203,6 +1239,8 @@ namespace ScienceRelay
 
 		private bool isOccluded(CommNode a, CommNode b, double dist, CommNetwork net)
 		{
+            //RelayLog("Checking connection occlusion");
+
 			bool? occlusion = null;
 
 			try
@@ -1226,6 +1264,8 @@ namespace ScienceRelay
 
 		private double directConnection(CommNode a, CommNode b, double dist, bool source, double strength)
 		{
+            //RelayLog("Checking direct connection strength");
+
 			double plasmaMult = a.GetSignalStrengthMultiplier(b) * b.GetSignalStrengthMultiplier(a);
 
 			double power = 0;
@@ -1287,8 +1327,8 @@ namespace ScienceRelay
 
 			CNConstellationLoaded = assembly != null;
 
-			if (CNConstellationLoaded)
-				RelayLog("CommNet Constellation addon detected; Science Relay disabling CommNet connection status integration");
+			//if (CNConstellationLoaded)
+			//	RelayLog("CommNet Constellation addon detected; Science Relay disabling CommNet connection status integration");
 
 			CNConstellationChecked = true;
 		}
