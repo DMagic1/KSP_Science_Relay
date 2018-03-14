@@ -1055,7 +1055,7 @@ namespace ScienceRelay
 
 							VesselType type = otherVessel.vesselType;
 
-							if (type == VesselType.Debris || type == VesselType.SpaceObject || type == VesselType.Unknown || type == VesselType.Flag)
+							if (type == VesselType.Debris || type == VesselType.SpaceObject || type == VesselType.Unknown || type == VesselType.Flag || type == VesselType.EVA)
 								continue;
 
 							if (otherVessel.connection == null || otherVessel.connection.Comm == null)
@@ -1063,8 +1063,11 @@ namespace ScienceRelay
 
                             //RelayLog("Vessel status check for\n---- {0} ----", otherVessel.vesselName);
 
-                            if (otherVessel.connection.ControlPath.First.cost < 0.0001)
-                                continue;
+                            if (otherVessel.connection.ControlPath != null && otherVessel.connection.ControlPath.First != null)
+                            {
+                                if (otherVessel.connection.ControlPath.First.cost < 0.0001)
+                                    continue;
+                            }
 
 							if (!net.FindPath(source, pathCache, otherVessel.connection.Comm))
 								continue;
