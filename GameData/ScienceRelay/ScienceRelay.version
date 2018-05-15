@@ -5,7 +5,7 @@
      "GITHUB":{
          "USERNAME":"DMagic1",
          "REPOSITORY":"KSP_Science_Relay",
-         "ALLOW_PRE_RELEASE":false,
+         "ALLOW_PRE_RELEASE":false
      },
      "VERSION":{
          "MAJOR":1,
