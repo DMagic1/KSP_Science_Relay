@@ -33,8 +33,8 @@ namespace ScienceRelay
 {
 	public class ScienceRelayDialog : MonoBehaviour
 	{
-		public static EventData<ExperimentsResultDialog> onDialogSpawn = new EventData<ExperimentsResultDialog>("onDialogSpawn");
-		public static EventData<ExperimentsResultDialog> onDialogClose = new EventData<ExperimentsResultDialog>("onDialogClose");
+		public static EventData<ExperimentsResultDialog, ScienceRelayDialog> onDialogSpawn = new EventData<ExperimentsResultDialog, ScienceRelayDialog>("onDialogSpawn");
+		public static EventData<ExperimentsResultDialog, ScienceRelayDialog> onDialogClose = new EventData<ExperimentsResultDialog, ScienceRelayDialog>("onDialogClose");
 
 		private ExperimentsResultDialog dialog;
 
@@ -60,16 +60,16 @@ namespace ScienceRelay
 				if (buttonPrev != null)
 					buttonPrev.onClick.AddListener(ScienceRelay.Instance.onPageChange);
 
-				if (buttonTransfer != null)
-					buttonTransfer.onClick.AddListener(ScienceRelay.Instance.onTransfer);
+				//if (buttonTransfer != null)
+				//	buttonTransfer.onClick.AddListener(ScienceRelay.Instance.onTransfer);
 			}
 
-			onDialogSpawn.Fire(dialog);
+			onDialogSpawn.Fire(dialog, this);
 		}
 
 		private void OnDestroy()
 		{
-			onDialogClose.Fire(dialog);
+			onDialogClose.Fire(dialog, this);
 		}
 	}
 }
