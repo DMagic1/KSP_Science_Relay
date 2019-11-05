@@ -26,6 +26,7 @@ THE SOFTWARE.
 #endregion
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Linq;
@@ -190,27 +191,29 @@ namespace ScienceRelay
 			for (int i = buttons.Length - 1; i >= 0; i--)
 			{
 				Button b = buttons[i];
-
+                //RelayLog("Dialog Button: {0}", b.name);
 				if (b.name == "ButtonPrev")
 					dialogListener.buttonPrev = b;
 				else if (b.name == "ButtonNext")
 					dialogListener.buttonNext = b;
 				else if (b.name == "ButtonKeep")
 				{
-					transferButton = Instantiate(b, b.transform.parent) as Button;
+                    //RelayLog("Cloning Keep Button...");
+                    dialogListener.buttonTransfer = Instantiate(b) as Button;
 
-					transferButton.name = "ButtonTransfer";
+                    dialogListener.buttonTransfer.name = "ButtonTransfer";
 
-					transferButton.onClick.RemoveAllListeners();
+                    dialogListener.buttonTransfer.onClick.RemoveAllListeners();
 
-					TooltipController_Text tooltip = transferButton.GetComponent<TooltipController_Text>();
+					TooltipController_Text tooltip = dialogListener.buttonTransfer.GetComponent<TooltipController_Text>();
 
 					if (tooltip != null)
 						tooltip.textString = Localizer.Format("#autoLOC_ScienceRelay_Tooltip");
 
 					if (spritesLoaded)
-					{
-						Selectable select = transferButton.GetComponent<Selectable>();
+                    {
+                        //RelayLog("Assigning Sprites To Transfer Button...");
+                        Selectable select = dialogListener.buttonTransfer.GetComponent<Selectable>();
 
 						if (select != null)
 						{
@@ -226,14 +229,14 @@ namespace ScienceRelay
 						}
 					}
 
-					dialogListener.buttonTransfer = transferButton;
+					//dialogListener.buttonTransfer = transferButton;
 				}
 			}
 
 			RelayLog("Science results prefab processed...");
 		}
 
-		private void onSpawn(ExperimentsResultDialog dialog)
+		private void onSpawn(ExperimentsResultDialog dialog, ScienceRelayDialog relayDialog)
 		{
 			if (dialog == null)
 				return;
@@ -242,29 +245,52 @@ namespace ScienceRelay
 
 			var buttons = resultsDialog.GetComponentsInChildren<Button>(true);
 
+            //RelayLog("1");
+
 			for (int i = buttons.Length - 1; i >= 0; i--)
 			{
 				Button b = buttons[i];
 
-				if (b == null)
+                //RelayLog("1-1-{0}", i);
+
+                if (b == null)
 					continue;
 
-				if (b.name != "ButtonTransfer")
-					continue;
+                //RelayLog("1-2-{0}", i);
 
-				transferButton = b;
-				break;
+                if (b.name == "ButtonKeep")
+                {
+                    //RelayLog("1-3-{0}", i);
+                    transferButton = Instantiate(relayDialog.buttonTransfer, b.transform.parent) as Button;
+
+                    transferButton.onClick.AddListener(onTransfer);
+
+                    break;
+                }
+
+     //           if (b.name != "ButtonTransfer")
+					//continue;
+
+                //RelayLog("1-3-{0}", i);
+
+                //transferButton = b;
+
+                //RelayLog("1-4-{0}", i);
+
+                //break;
 			}
 
-			currentPage = resultsDialog.currentPage;
+            currentPage = resultsDialog.currentPage;
 
-			if (currentPage.pageData != null)
+            if (currentPage.pageData != null)
 				currentPage.pageData.baseTransmitValue = currentPage.xmitDataScalar;
 
-			transferButton.gameObject.SetActive(getConnectedVessels());
-		}
+            bool connected = getConnectedVessels();
 
-		private void onClose(ExperimentsResultDialog dialog)
+            transferButton.gameObject.SetActive(connected);
+        }
+
+        private void onClose(ExperimentsResultDialog dialog, ScienceRelayDialog relayDialog)
 		{
 			if (dialog == null || resultsDialog == null)
 				return;
@@ -377,10 +403,9 @@ namespace ScienceRelay
 												},
 												page.transmitWarningMessage);
 											},
-											160,
-											30,
-											true,
-											null);
+											true);
+
+                    button.size = new Vector2(160, 30);
 				}
 				else
 				{
@@ -605,7 +630,7 @@ namespace ScienceRelay
 						break;
 				}
 
-				IScienceDataTransmitter bestTransmitter = ScienceUtil.GetBestTransmitter(RelayData._source.FindPartModulesImplementing<IScienceDataTransmitter>());
+                IScienceDataTransmitter bestTransmitter = ScienceUtil.GetBestTransmitter(RelayData._source);// ScienceUtil.GetBestTransmitter(RelayData._source.FindPartModulesImplementing<IScienceDataTransmitter>());
 
 				if (bestTransmitter == null)
 				{
@@ -632,81 +657,163 @@ namespace ScienceRelay
 
 		private void onTriggeredData(ScienceData data, Vessel vessel, bool aborted)
 		{
-			if (vessel == null)
-				return;
+            StartCoroutine(WaitForTrigger(data, vessel, aborted));
 
-			if (vessel != FlightGlobals.ActiveVessel)
-				return;
+			//if (vessel == null)
+			//	return;
 
-			if (data == null)
-				return;
+			//if (vessel != FlightGlobals.ActiveVessel)
+			//	return;
 
-			for (int i = queuedData.Count - 1; i >= 0; i--)
-			{
-				ScienceRelayData d = queuedData[i];
+			//if (data == null)
+			//	return;
 
-				if (d._data.subjectID != data.subjectID)
-					continue;
+			//for (int i = queuedData.Count - 1; i >= 0; i--)
+			//{
+			//	ScienceRelayData d = queuedData[i];
 
-				if (aborted)
-				{
-					RelayLog("Science data: [{0}] transmission to vessel: [{1}] aborted, returning to sender: [{2}]", d._data.title, d._target.vesselName, d._source.vesselName);
-					data.triggered = false;
-					return;
-				}
+			//	if (d._data.subjectID != data.subjectID)
+			//		continue;
 
-				if (!finishTransfer(d._target, d._data, d._boost))
-				{					
-					RelayLog("Data transfer failed; returning to sender: [{0}]", d._source.vesselName);
+			//	if (aborted)
+			//	{
+			//		RelayLog("Science data: [{0}] transmission to vessel: [{1}] aborted, returning to sender: [{2}]", d._data.title, d._target.vesselName, d._source.vesselName);
+   //                 data.triggered = false;
+   //                 return;
+			//	}
+
+			//	if (!finishTransfer(d._target, d._data, d._boost))
+			//	{					
+			//		RelayLog("Data transfer failed; returning to sender: [{0}]", d._source.vesselName);
 				
-					Part host = d._host;
+			//		Part host = d._host;
 
-					List<IScienceDataContainer> containers = host.FindModulesImplementing<IScienceDataContainer>();
+			//		List<IScienceDataContainer> containers = host.FindModulesImplementing<IScienceDataContainer>();
 
-					IScienceDataContainer hostContainer = null;
+			//		IScienceDataContainer hostContainer = null;
 
-					for (int j = containers.Count - 1; j >= 0; j--)
-					{
-						IScienceDataContainer container = containers[j];
+			//		for (int j = containers.Count - 1; j >= 0; j--)
+			//		{
+			//			IScienceDataContainer container = containers[j];
 
-						if (container == null)
-							continue;
+			//			if (container == null)
+			//				continue;
 
-						PartModule mod = container as PartModule;
+			//			PartModule mod = container as PartModule;
 
-						if (mod.part == null)
-							continue;
+			//			if (mod.part == null)
+			//				continue;
 
-						if (mod.part.flightID != data.container)
-							continue;
+			//			if (mod.part.flightID != data.container)
+			//				continue;
 
-						hostContainer = container;
-						break;
-					}
+			//			hostContainer = container;
+			//			break;
+			//		}
 
-					if (hostContainer != null)
-					{
-						data.triggered = false;
-						hostContainer.ReturnData(data);
-					}
-				}
-				else
-				{
-					RelayLog("Science data: [{0}] successfully transmitted to vessel: [{1}] from vessel: [{2}]", d._data.title, d._target.vesselName, d._source.vesselName);
-					ScreenMessages.PostScreenMessage(Localizer.Format("#autoLOC_238419", new string[]
-					{
-						d._target.vesselName,
-						data.dataAmount.ToString("F0"),
-						data.title
-					}),
-					4, ScreenMessageStyle.UPPER_LEFT);
-				}
+			//		if (hostContainer != null)
+   //                 {
+   //                     data.triggered = false;
+   //                     hostContainer.ReturnData(data);
+			//		}
+			//	}
+			//	else
+			//	{
+			//		RelayLog("Science data: [{0}] successfully transmitted to vessel: [{1}] from vessel: [{2}]", d._data.title, d._target.vesselName, d._source.vesselName);
+			//		ScreenMessages.PostScreenMessage(Localizer.Format("#autoLOC_238419", new string[]
+			//		{
+			//			d._target.vesselName,
+			//			data.dataAmount.ToString("F0"),
+			//			data.title
+			//		}),
+			//		4, ScreenMessageStyle.UPPER_LEFT);
+			//	}
 
-				queuedData.Remove(d);
+			//	queuedData.Remove(d);
 
-				break;
-			}
+			//	break;
+			//}
 		}
+
+        private IEnumerator WaitForTrigger(ScienceData data, Vessel vessel, bool aborted)
+        {
+            yield return new WaitForEndOfFrame();
+
+            if (vessel == null)
+                yield break;
+
+            if (vessel != FlightGlobals.ActiveVessel)
+                yield break;
+
+            if (data == null)
+                yield break;
+
+            for (int i = queuedData.Count - 1; i >= 0; i--)
+            {
+                ScienceRelayData d = queuedData[i];
+
+                if (d._data.subjectID != data.subjectID)
+                    continue;
+
+                if (aborted)
+                {
+                    RelayLog("Science data: [{0}] transmission to vessel: [{1}] aborted, returning to sender: [{2}]", d._data.title, d._target.vesselName, d._source.vesselName);
+                    data.triggered = false;
+                    yield break;
+                }
+
+                if (!finishTransfer(d._target, d._data, d._boost))
+                {
+                    RelayLog("Data transfer failed; returning to sender: [{0}]", d._source.vesselName);
+
+                    Part host = d._host;
+
+                    List<IScienceDataContainer> containers = host.FindModulesImplementing<IScienceDataContainer>();
+
+                    IScienceDataContainer hostContainer = null;
+
+                    for (int j = containers.Count - 1; j >= 0; j--)
+                    {
+                        IScienceDataContainer container = containers[j];
+
+                        if (container == null)
+                            continue;
+
+                        PartModule mod = container as PartModule;
+
+                        if (mod.part == null)
+                            continue;
+
+                        if (mod.part.flightID != data.container)
+                            continue;
+
+                        hostContainer = container;
+                        break;
+                    }
+
+                    if (hostContainer != null)
+                    {
+                        data.triggered = false;
+                        hostContainer.ReturnData(data);
+                    }
+                }
+                else
+                {
+                    RelayLog("Science data: [{0}] successfully transmitted to vessel: [{1}] from vessel: [{2}]", d._data.title, d._target.vesselName, d._source.vesselName);
+                    ScreenMessages.PostScreenMessage(Localizer.Format("#autoLOC_238419", new string[]
+                    {
+                        d._target.vesselName,
+                        data.dataAmount.ToString("F0"),
+                        data.title
+                    }),
+                    4, ScreenMessageStyle.UPPER_LEFT);
+                }
+
+                queuedData.Remove(d);
+
+                break;
+            }
+        }
 
 		private bool finishTransfer(Vessel v, ScienceData d, float boost)
 		{
@@ -745,9 +852,9 @@ namespace ScienceRelay
 				}
 
 				if (currentContainer != null)
-				{
-					d.triggered = false;
-					d.dataAmount *= (d.baseTransmitValue * (1 + boost));
+                {
+                    d.triggered = false;
+                    d.dataAmount *= (d.baseTransmitValue * (1 + boost));
 					d.transmitBonus = 1;
 					d.baseTransmitValue = 1;
 					return currentContainer.AddData(d);
@@ -823,9 +930,9 @@ namespace ScienceRelay
 				}
 
 				if (currentContainer != null)
-				{
-					d.triggered = false;
-					d.dataAmount = d.dataAmount * (d.baseTransmitValue * (boost + 1));
+                {
+                    d.triggered = false;
+                    d.dataAmount = d.dataAmount * (d.baseTransmitValue * (boost + 1));
 					d.transmitBonus = 1;
 					d.baseTransmitValue = 1;
 					d.container = host;
@@ -839,7 +946,7 @@ namespace ScienceRelay
 			return false;
 		}
 
-		private bool HasData(string id, List<ScienceData> data)
+        private bool HasData(string id, List<ScienceData> data)
 		{
 			for (int i = data.Count - 1; i >= 0; i--)
 			{
