@@ -103,12 +103,12 @@ namespace ScienceRelay
 
 		public override string Section
 		{
-			get { return "DMagic Mods"; }
+			get { return "Science Relay"; }
 		}
 
 		public override string DisplaySection
 		{
-			get { return "DMagic Mods"; }
+			get { return "Science Relay"; }
 		}
 
 		public override int SectionOrder
